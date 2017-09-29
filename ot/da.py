@@ -1283,7 +1283,7 @@ class SinkhornTransport(BaseTransport):
         returned_ = sinkhorn(
             a=self.mu_s, b=self.mu_t, M=self.cost_, reg=self.reg_e,
             numItermax=self.max_iter, stopThr=self.tol,
-            verbose=self.verbose, log=self.log)
+            verbose=self.verbose, log=self.log,gpu=self.gpu)
 
         # deal with the value of log
         if self.log:

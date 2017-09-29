@@ -38,6 +38,7 @@ def benchSinkhorn(a, b):
     g2 = ot2.coupling_
     time3 = time.time()
 
+
     print("Sinkhorn CPU, time: {:6.2f} sec ".format(time2 - time1))
     print("Sinkhorn GPU, time: {:6.2f} sec ".format(time3 - time2))
     np.testing.assert_allclose(g1, cp.asnumpy(g2), rtol=1e-5, atol=1e-5)
@@ -45,7 +46,7 @@ def benchSinkhorn(a, b):
 
 for tp in [np.float32, np.float64]:
     print("Using " + str(tp))
-    a = np.random.rand(10000, 100).astype(tp)
-    b = np.random.rand(10000, 100).astype(tp)
+    a = np.random.rand(5000, 100).astype(tp)
+    b = np.random.rand(5000, 100).astype(tp)
     benchDistance(a, b)
     benchSinkhorn(a, b)
