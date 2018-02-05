@@ -103,3 +103,6 @@ ENV/
 
 # coverage output folder
 cov_html/
+
+# temporary output
+*.png

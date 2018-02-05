@@ -206,7 +206,8 @@ def update_kl_loss(p, lambdas, T, Cs):
 
 
 def gromov_wasserstein(C1, C2, p, q, loss_fun, epsilon,
-                       max_iter=1000, tol=1e-9, verbose=False, log=False):
+                       max_iter=1000, tol=1e-9, verbose=False, log=False,
+                       weight_M=0, M=0):
     """
     Returns the gromov-wasserstein coupling between the two measured similarity matrices
 
@@ -259,6 +260,12 @@ def gromov_wasserstein(C1, C2, p, q, loss_fun, epsilon,
     T : ndarray, shape (ns, nt)
         coupling between the two spaces that minimizes :
             \sum_{i,j,k,l} L(C1_{i,k},C2_{j,l})*T_{i,j}*T_{k,l}-\epsilon(H(T))
+
+
+    Modified by Rachel on 2/3: 
+        Add the order-1 information to the function. 
+            weight_M: the weight of the first-order information. Range: [0,1], Default: 0
+            M: the first-order cost matrix. A ns * nt matrix. Default: 0
     """
 
     C1 = np.asarray(C1, dtype=np.float64)
@@ -267,17 +274,21 @@ def gromov_wasserstein(C1, C2, p, q, loss_fun, epsilon,
     T = np.outer(p, q)  # Initialization
 
     cpt = 0
-    err = 1
+    err = 1    
 
     while (err > tol and cpt < max_iter):
 
         Tprev = T
-
+        # ----- Modified by Rachel on 02/03/2018 -----
         if loss_fun == 'square_loss':
-            tens = tensor_square_loss(C1, C2, T)
+            # tens = tensor_square_loss(C1, C2, T)
+            tens = (1 - weight_M) * tensor_square_loss(C1, C2, T) + weight_M * M
 
         elif loss_fun == 'kl_loss':
-            tens = tensor_kl_loss(C1, C2, T)
+            # tens = tensor_kl_loss(C1, C2, T)
+            tens = (1 - weight_M) * tensor_kl_loss(C1, C2, T) + weight_M * M
+
+        # ----- Modified by Rachel end -----
 
         T = sinkhorn(p, q, tens, epsilon)
 
@@ -302,9 +313,12 @@ def gromov_wasserstein(C1, C2, p, q, loss_fun, epsilon,
     else:
         return T
 
+# --- Rachel begin ----
+# Change the interface of the function
+
 
 def gromov_wasserstein2(C1, C2, p, q, loss_fun, epsilon,
-                        max_iter=1000, tol=1e-9, verbose=False, log=False):
+                        max_iter=1000, tol=1e-9, verbose=False, log=False, weight_M=0, M=0):
     """
     Returns the gromov-wasserstein discrepancy between the two measured similarity matrices
 
@@ -354,10 +368,12 @@ def gromov_wasserstein2(C1, C2, p, q, loss_fun, epsilon,
 
     if log:
         gw, logv = gromov_wasserstein(
-            C1, C2, p, q, loss_fun, epsilon, max_iter, tol, verbose, log)
+        #   C1, C2, p, q, loss_fun, epsilon, max_iter, tol, verbose, log)
+            C1, C2, p, q, loss_fun, epsilon, max_iter, tol, verbose, log, weight_M, M)
     else:
         gw = gromov_wasserstein(C1, C2, p, q, loss_fun,
-                                epsilon, max_iter, tol, verbose, log)
+        #                       epsilon, max_iter, tol, verbose, log)
+                                epsilon, max_iter, tol, verbose, log, weight_M, M)
 
     if loss_fun == 'square_loss':
         gw_dist = np.sum(gw * tensor_square_loss(C1, C2, gw))
@@ -370,6 +386,7 @@ def gromov_wasserstein2(C1, C2, p, q, loss_fun, epsilon,
     else:
         return gw_dist
 
+# --- Rachel ends ----
 
 def gromov_barycenters(N, Cs, ps, p, lambdas, loss_fun, epsilon,
                        max_iter=1000, tol=1e-9, verbose=False, log=False, init_C=None):
