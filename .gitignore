@@ -106,3 +106,6 @@ cov_html/
 
 # temporary output
 *.png
+
+# Matlab files
+*.m

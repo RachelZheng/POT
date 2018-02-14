@@ -119,7 +119,6 @@ for i in range(7):
 	pl.title('First-order constraints ' + str(round(i * 0.15,2)))
 	pl.tight_layout()
 
-
 pl.tight_layout()
 
 pl.show()
