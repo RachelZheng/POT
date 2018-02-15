@@ -168,7 +168,9 @@ def align_2_imgs(I1, I2, options = dict()):
 	T_label = get_label_mapping(pts_s_sub[:,-1], pts_t_sub[:,-1], G1) # Label transform matrix
 	# Visualize the mapping
 	draw_mapping_class(pts_s_sub[:,:-1], pts_t_sub[:,:-1], G1, T_label, pts_s_sub[:,-1], pts_t_sub[:,-1])
+	# ---- Compute the 2nd order mapping information ----
 	# For each small region, compute GW-DIST mapping with 2nd order information
+	G12 = 
 	return pts_s_sub, pts_t_sub, G1
 
 
@@ -214,7 +216,7 @@ def get_label_mapping(label_s, label_t, Gs):
 	T_label      = np.zeros((l_s, l_t))
 	thres        = 1e-6
 	G[G < thres] = 0 
-	for i_s in range(1,l_s):
+	for i_s in range(1,l_s + 1):
 		idx_class     = np.where(label_s == i_s)[0] # The index of class i_s from the source
 		G_class       = G[idx_class,:] # Sub-transformation matrix
 		idx_target    = np.nonzero(G_class)[1].tolist() # matched points idxes
@@ -226,6 +228,50 @@ def get_label_mapping(label_s, label_t, Gs):
 			idx_class_target          = np.where(label_matched == i_t)[0]
 			T_label[i_s - 1, i_t - 1] = np.sum(weight_M[idx_class_target])
 	return T_label
+
+
+def get_subset_transform(T):
+	""" Get the subset of the cell transform matrix T
+	Input: l1 * l2 transform matrix T matrix
+	Output: list of indexes, like [[[1,2],[2]], [[3, 4], [1]]]
+		indicates classes 1, 2 in source transfers to class 2 in target
+		classes 3,4 in source transfers to class 1 in target
+	"""
+	l1, l2 = T.shape
+	for
+
+
+
+##### ----- COMMENT 2/14/18 ------
+##### GIVEN THE TRANSFORM MATRIX T, WE SHOULD GET THE SUBSET OF PTS 
+def get_2nd_mapping(xs, xt, label_s, label_t, M, T, options):
+	""" Get the second-order transform matrix. 
+	Input: source/target samples, their labels, options
+	Output: A list of sub-samples list_xs, list_xt, a list of transform matrix list_G 
+	"""
+	# The weight of considering first-order information
+	weight_M = 0.9
+	N_pts = 300
+	if 'weight_M' in options:
+		weight_M = options['weight_M']
+	if 'N_pts' in options:
+		N_pts = options['N_pts']
+	# --- Compute the alignment of each labels --- 
+	l_s, l_t = T.shape
+	for i in range(1, l_s):
+		class_s = i + 1 # The classes of the source pts
+		class_t = np.nonzero(T[i, :])[0] # The classes of the target pts
+		weight_t = T[i, :][class_t] # The relative weights of the target pts
+		class_t = [(i + 1) for i in class_t]
+		idx_s = np.where(label_s == class_s)[0] # The index of the source pts
+		idx_t = np.array([], dtype = int) # The index of the target pts
+		for j in class_t:
+			idx_t = np.append(idx_t, np.where(label_t == j)[0])
+		xs_sub = xs[idx_s, :] # The subset of pts from the source at class i
+		xt_sub = xt[idx_t, :] # The subset of pts from the target possibly changed from class i
+
+
+
 
 if __name__ == '__main__':
 options = dict()
