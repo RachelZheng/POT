@@ -10,45 +10,29 @@ import os, sys, glob, shutil, cv2, random, warnings
 
 sys.path.insert(0,'/Users/xvz5220-admin/Dropbox/gromov_wasserstein_dist/POT/')
 import ot
-
-def get_one_layer_img():
-	""" Move one layer images to the target folder
-	""" 
-	os.chdir(PATH_RAW)
-	for img in glob.glob('*_09.png'):
-		shutil.copy(img, PATH_LAYER_9 + img)
-		convert2black_white_img(PATH_LAYER_9 + img)
+from bio_cell_track_help import *
 
 
-def convert2black_white_img(image_name, options = dict()):
-	""" Convert imgs to black and white
-	"""
-	img = cv2.imread(image_name,0)
-	if 'path_output' in options:
-		cv2.imwrite(image_name, options['path_output'] + img)
-
-
-def get_gw_eps(eps_0, C1, C2, a, b, loss = 'square_loss', weight_M = 0, M = 0):
+def get_gw_eps(C1, C2, a, b, eps_0 = 1e-2, loss = 'square_loss', weight_M = 0, M = 0):
 	""" Get the suitable epsilon value in the ot.gromov_wasserstein
 	function.
 	Input: all the inputs for 
 	"""
 	flag_stop = False
 	eps       = eps_0
-	if weight_M == 1:
-		# degenerate to the order-1 transform
-		# Gs = ot.sinkhorn(a, b, M, lambd)
-		gw = ot.emd(a, b, M)
 	while not flag_stop:
-		with warnings.catch_warnings(record=True) as w:
-			warnings.simplefilter("always")
-			gw = ot.gromov_wasserstein(C1, C2, a, b, loss, epsilon=eps, weight_M=weight_M, M=M)
-			if len(w) == 0:
-				eps/= 2
-			else:
-				flag_stop = True 
-				eps *= 2
+		try:
+			with warnings.catch_warnings(record=True) as w:
+				warnings.simplefilter("always")
 				gw = ot.gromov_wasserstein(C1, C2, a, b, loss, epsilon=eps, weight_M=weight_M, M=M)
+				if len(w) == 0:
+					eps/= 2
+				else:
+					flag_stop = True
+		except:
+			flag_stop = True
+	eps *= 2
+	gw = ot.gromov_wasserstein(C1, C2, a, b, loss, epsilon=eps, weight_M=weight_M, M=M)
 	return gw, eps
 
 
@@ -72,7 +56,7 @@ def get_sinkhorn_eps(p_s, p_t, M, eps_0 = 1e-3):
 	return eps
 
 
-def get_img_labels(I, options = dict()):
+def get_seg_labels(I, options = dict()):
 	""" Get image representation pts, distances matrix and 
 	Input: grayscale images I
 	Output: sample pts X, the labeled image labels_filtered
@@ -121,94 +105,11 @@ def get_img_labels(I, options = dict()):
 	return pts, labels_filtered
 
 
-def align_2_imgs(I1, I2, options = dict()):
-	""" Input: grayscale images I1 and I2
-	"""
-	# The number of pts from source and target
-	if 'N_pts' in options:
-		N_pts = options['N_pts']
-	else:
-		N_pts = 300
-	# Random seed for points selection
-	if 'seed' in options:
-		random.seed(options['seed'])
-	# The first-order mapping computation method
-	# Choice: emd and sinkhorn
-	if 'method_first' in options:
-		method_first = options['method_first']
-	else:
-		method_first = 'emd'
-	# ----- Compute alignments ------
-	pts_s, label_s = get_img_labels(I1, options) # source labels 
-	pts_t, label_t = get_img_labels(I2, options) # target labels
-	# In pts, the last column is the label of the point
-	if len(pts_s) > N_pts:
-		idx_s     = np.random.randint(len(pts_s), size=N_pts)
-		pts_s_sub = pts_s[idx_s,:]
-	else:
-		pts_s_sub = pts_s
-	if len(pts_t) > N_pts:
-		idx_t     = np.random.randint(len(pts_t), size=N_pts)
-		pts_t_sub = pts_t[idx_t,:]
-	else:
-		pts_t_sub = pts_t
-	# Compute first-order information
-	M = ot.dist(pts_s_sub[:,:-1], pts_t_sub[:,:-1], metric='euclidean')
-	M /= M.max()
-	# Point-wise probability
-	p_s = np.ones((len(pts_s_sub),)) / len(pts_s_sub)
-	p_t = np.ones((len(pts_t_sub),)) / len(pts_t_sub)
-	# Compute the transfer matrix
-	if method_first == 'emd':
-		G1 = ot.emd(p_s, p_t, M)
-	else:
-		eps = get_sinkhorn_eps(p_s, p_t, M)
-		G1  = ot.sinkhorn(p_s, p_t, M, eps)
-	# Get the cell-wise mapping
-	T_label = get_label_mapping(pts_s_sub[:,-1], pts_t_sub[:,-1], G1) # Label transform matrix
-	# Visualize the mapping
-	draw_mapping_class(pts_s_sub[:,:-1], pts_t_sub[:,:-1], G1, T_label, pts_s_sub[:,-1], pts_t_sub[:,-1])
-	# ---- Compute the 2nd order mapping information ----
-	# For each small region, compute GW-DIST mapping with 2nd order information
-	G12 = 
-	return pts_s_sub, pts_t_sub, G1
-
-
-def draw_mapping(xs, xt, Gs, options = dict()):
-	pl.figure()
-	ot.plot.plot2D_samples_mat(xs, xt, Gs, color=[.5, .5, 1])
-	pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
-	pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
-	pl.legend(loc=0)
-	if 'img_name' in options:
-		img_name = options['img_name']
-	else:
-		img_name = 'trans.png'
-	pl.savefig('/Users/xvz5220-admin/Desktop/' + img_name)
-
-
-def draw_mapping_class(xs, xt, Gs, T, label_s, label_t):
-	options = dict()
-	for i in range(1, label_s.max()):
-		idx_s   = np.where(label_s == i)[0] # index of the pts from the source
-		class_t = np.nonzero(T[i - 1,:])[0].tolist() # index of the classes from the target
-		class_t = [i + 1 for i in class_t]
-		idx_t = np.array([],dtype = int)
-		for j in class_t:
-			idx_t = np.append(idx_t, np.where(label_t == j)[0]) # index of the pts from the target
-		options['img_name'] = 'trans' + '%02d'%i + '.png'
-		G_sub = Gs[idx_s, :]
-		G_sub = G_sub[:,idx_t]
-		xs_sub = xs[idx_s,:]
-		xt_sub = xt[idx_t,:]
-		draw_mapping(xs_sub, xt_sub, G_sub, options)
-
-
-
 def get_label_mapping(label_s, label_t, Gs):
 	""" Get the mapping between source and target cells
 	Input: n1 * 1 labels for source, n2 * 1 labels for target, transfer matrix
 	Output: l1 * l2 matrix with relative transformation, which is row-normalized
+	### PLEASE BE CAREFUL: OUR LABELS BEGIN WITH 1
 	"""
 	l_s          = label_s.max()
 	l_t          = label_t.max()
@@ -237,50 +138,94 @@ def get_subset_transform(T):
 		indicates classes 1, 2 in source transfers to class 2 in target
 		classes 3,4 in source transfers to class 1 in target
 	"""
-	l1, l2 = T.shape
-	for
+	l1, l2      = T.shape
+	idx_s_0     = set(range(l1)) # All the elements that are not assigned
+	list_result = []
+	flag_stop   = False # Flag indicating all the cells are classified
+	while not flag_stop:
+		# Initialization
+		idx_s           = set([idx_s_0.pop()])
+		idx_t           = set(np.nonzero(T[list(idx_s),:][0,:])[0])
+		flag_add_finish = False   # If it is True then stops
+		flag_s          = 's' # The next element to add. Options: s and t
+		while not flag_add_finish:
+			if flag_s == 's':
+				idx_s_new = []
+				for ele_t in list(idx_t):
+					idx_s_new += (np.nonzero(T[:,ele_t])[0]).tolist()
+				idx_s_new = set(idx_s_new)
+				if idx_s_new == idx_s:
+					flag_add_finish = True
+				else:
+					flag_s  = 't'
+					idx_s   = idx_s_new
+					idx_s_0 = idx_s_0 - idx_s
+			else:
+				idx_t_new = []
+				for ele_s in list(idx_s):
+					idx_t_new += (np.nonzero(T[ele_s,:])[0]).tolist()
+				idx_t_new = set(idx_t_new)
+				if idx_t_new == idx_t:
+					flag_add_finish = True
+				else:
+					flag_s = 's'
+					idx_t  = idx_t_new
+		# Add 1 for the source and target classes
+		list_result.append([[(s + 1) for s in list(idx_s)],[(t + 1) for t in list(idx_t)]])
+		if len(idx_s_0) == 0:
+			flag_stop = True
+	# Add one for every class
+	return list_result
 
 
+def get_subset_gw(pts_s, pts_t, label_s, label_t, list_subset, options):
+	""" Get the list of mapping between source pts and target pts. 
+	"""
+	list_gw = []
+	list_pts_s = []
+	list_pts_t = []
+	for list_mapping in range(len(list_subset)):
+		class_s = list_mapping[0]
+		class_t = list_mapping[1]
+		idx_s = np.array([])
+		idx_t = np.array([])
+	for i in class_s:
+		idx_s = np.append(idx_s, np.where(label_s == i)[0])
+	for i in class_t:
+		idx_t = np.append(idx_t, np.where(label_t == i)[0])
+	pts_s_sub = pts_s[idx_s.astype(int),:]
+	pts_t_sub = pts_t[idx_t.astype(int),:]
+	gw, pts_s_new, pts_t_new = get_2nd_mapping(pts_s_sub, pts_t_sub, options)
+	list_gw.append(gw)
+	list_pts_s.append(pts_s_sub)
+	list_pts_t.append(pts_t_sub)
+	return list_gw, list_pts_s, list_pts_t
 
-##### ----- COMMENT 2/14/18 ------
-##### GIVEN THE TRANSFORM MATRIX T, WE SHOULD GET THE SUBSET OF PTS 
-def get_2nd_mapping(xs, xt, label_s, label_t, M, T, options):
+
+def get_2nd_mapping(pts_s, pts_t, options):
 	""" Get the second-order transform matrix. 
-	Input: source/target samples, their labels, options
-	Output: A list of sub-samples list_xs, list_xt, a list of transform matrix list_G 
+	Input: source/target samples, options
+	Output: alignment matrix G, the subset of samples from source/target
 	"""
 	# The weight of considering first-order information
-	weight_M = 0.9
-	N_pts = 300
+	weight_M = 0.5
+	N_pts = 500
 	if 'weight_M' in options:
 		weight_M = options['weight_M']
 	if 'N_pts' in options:
 		N_pts = options['N_pts']
-	# --- Compute the alignment of each labels --- 
-	l_s, l_t = T.shape
-	for i in range(1, l_s):
-		class_s = i + 1 # The classes of the source pts
-		class_t = np.nonzero(T[i, :])[0] # The classes of the target pts
-		weight_t = T[i, :][class_t] # The relative weights of the target pts
-		class_t = [(i + 1) for i in class_t]
-		idx_s = np.where(label_s == class_s)[0] # The index of the source pts
-		idx_t = np.array([], dtype = int) # The index of the target pts
-		for j in class_t:
-			idx_t = np.append(idx_t, np.where(label_t == j)[0])
-		xs_sub = xs[idx_s, :] # The subset of pts from the source at class i
-		xt_sub = xt[idx_t, :] # The subset of pts from the target possibly changed from class i
-
-
-
-
-if __name__ == '__main__':
-options = dict()
-options['obj_white'] = True
-options['method_first'] = 'sinkhorn'
-options['lambda_first'] = 1e-3
-I1 = cv2.imread(PATH_LAYER_9 + 't000.tif_09.png', cv2.IMREAD_GRAYSCALE)
-I2 = cv2.imread(PATH_LAYER_9 + 't001.tif_09.png', cv2.IMREAD_GRAYSCALE)
-	"""
+	if 'seed' in options:
+		random.seed(options['seed'])
+	if len(pts_s) > N_pts:
+		idx_s     = np.random.randint(len(pts_s), size=N_pts)
+		pts_s_sub = pts_s[idx_s,:]
+	else:
+		pts_s_sub = pts_s
+	if len(pts_t) > N_pts:
+		idx_t     = np.random.randint(len(pts_t), size=N_pts)
+		pts_t_sub = pts_t[idx_t,:]
+	else:
+		pts_t_sub = pts_t
 	# Compute first-order information
 	M = ot.dist(pts_s_sub, pts_t_sub, metric='euclidean')
 	M /= M.max()
@@ -293,12 +238,84 @@ I2 = cv2.imread(PATH_LAYER_9 + 't001.tif_09.png', cv2.IMREAD_GRAYSCALE)
 	p_s = np.ones((len(pts_s_sub),)) / len(pts_s_sub)
 	p_t = np.ones((len(pts_t_sub),)) / len(pts_t_sub)
 	# Find the suitable epsilon for the computation
-	eps_0 = 1e-3
-	gw, eps = get_gw_eps(eps_0, C_s, C_t, p_s, p_t) # eps value
-	"""
+	gw, eps = get_gw_eps(C_s, C_t, p_s, p_t, weight_M=weight_M, M=M)
+	# Just second-order information
+	return gw, pts_s_sub, pts_t_sub
 
-	"""
-	from bio_cell_track import *
 
+def align_2_imgs(I1, I2, options = dict()):
+	""" Input: grayscale images I1 and I2
 	"""
+	# The number of pts from source and target
+	if 'N_pts' in options:
+		N_pts = options['N_pts']
+	else:
+		N_pts = 300
+	# Random seed for points selection
+	if 'seed' in options:
+		random.seed(options['seed'])
+	# The first-order mapping computation method
+	# Choice: emd and sinkhorn
+	if 'method_first' in options:
+		method_first = options['method_first']
+	else:
+		method_first = 'emd'
+	# ----- Compute alignments of each cell ------
+	pts_s, label_s = get_seg_labels(I1, options) # source pts, labels 
+	pts_t, label_t = get_seg_labels(I2, options) # target pts, labels
+	# In pts, the last column is the label of the point
+	if len(pts_s) > N_pts:
+		idx_s     = np.random.randint(len(pts_s), size=N_pts)
+		pts_s_sub = pts_s[idx_s,:]
+	else:
+		pts_s_sub = pts_s
+	if len(pts_t) > N_pts:
+		idx_t     = np.random.randint(len(pts_t), size=N_pts)
+		pts_t_sub = pts_t[idx_t,:]
+	else:
+		pts_t_sub = pts_t
+	label_s_sub = pts_s_sub[:,-1]
+	label_t_sub = pts_t_sub[:,-1]
+	pts_s_sub   = pts_s_sub[:,:-1]
+	pts_t_sub   = pts_t_sub[:,:-1]
+	label_s     = pts_s[:,-1]
+	label_t     = pts_t[:,-1]
+	pts_s       = pts_s[:,:-1]
+	pts_t       = pts_t[:,:-1]
+	# Compute first-order information
+	M = ot.dist(pts_s_sub, pts_t_sub, metric='euclidean')
+	M /= M.max()
+	# Point-wise probability
+	p_s = np.ones((len(pts_s_sub),)) / len(pts_s_sub)
+	p_t = np.ones((len(pts_t_sub),)) / len(pts_t_sub)
+	# Compute the transfer matrix
+	if method_first == 'emd':
+		G1 = ot.emd(p_s, p_t, M)
+	else:
+		eps = get_sinkhorn_eps(p_s, p_t, M)
+		G1  = ot.sinkhorn(p_s, p_t, M, eps)
+	# Get the cell-wise mapping
+	T_label     = get_label_mapping(label_s_sub, label_t_sub, G1) # Label transform matrix
+	# Visualize the mapping
+	draw_mapping_class(pts_s_sub, pts_t_sub, G1, T_label, label_s_sub, label_t_sub)
+	# For each small region, compute GW-DIST mapping with 2nd order information
+	# Find the subset of the matching elements
+	list_subset = get_subset_transform(T)
+	# --- For each cell, compute alignment within the neighbouring range of it ---- 
+	# For each component, finding the alignment within their neighbouring areas
+	list_gw, list_pts_s, list_pts_t = get_subset_gw(pts_s, pts_t, label_s, label_t, list_subset, options)
+	# Visualize mappings in the subset
+	if 'visualize' in options and options['visualize'] == True:
+		for i in range(len(list_gw)):
+			options['img_name'] = 'trans_img_' + list2str(list_subset[i][0]) + '.png'
+			draw_mapping(list_pts_s[i], list_pts_t[i], list_gw[i], options)
+	# return pts_s_sub, pts_t_sub, G1
 
+
+if __name__ == '__main__':
+	options = dict()
+	options['obj_white'] = True
+	options['method_first'] = 'sinkhorn'
+	options['lambda_first'] = 1e-3
+	I1 = cv2.imread(PATH_LAYER_9 + 't000.tif_09.png', cv2.IMREAD_GRAYSCALE)
+	I2 = cv2.imread(PATH_LAYER_9 + 't001.tif_09.png', cv2.IMREAD_GRAYSCALE)
