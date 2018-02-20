@@ -10,7 +10,6 @@ from config import *
 sys.path.insert(0, PATH_OT)
 import ot
 from bio_cell_track_helper import *
-from config import *
 
 def get_gw_eps(C1, C2, a, b, eps_0 = 1e-2, loss = 'square_loss', weight_M = 0, M = 0):
 	""" Get the suitable epsilon value in the ot.gromov_wasserstein
@@ -96,17 +95,6 @@ def get_seg_labels(I, options = dict()):
 			labels_filtered[labels_filtered == i] = 0
 			for j in range(i, N_cell - 1):
 				labels_filtered[labels_filtered == j] = j - 1
-	"""
-	# Visualization
-	label_hue = np.uint8(179*labels/np.max(labels))
-	blank_ch = 255*np.ones_like(label_hue)
-	labeled_img = cv2.merge([label_hue, blank_ch, blank_ch])
-	# cvt to BGR for display
-	labeled_img = cv2.cvtColor(labeled_img, cv2.COLOR_HSV2BGR)
-	# set bg label to black
-	labeled_img[label_hue==0] = 0
-	cv2.imwrite('/Users/xvz5220-admin/Desktop/labeled2.png', labeled_img)
-	"""
 	# Combine labels and pts together
 	pts = np.nonzero(labels_filtered)
 	pts = np.concatenate((pts[0].reshape((-1,1)),pts[1].reshape((-1,1))),axis = 1)
@@ -191,7 +179,10 @@ def get_subset_transform(T):
 
 
 def get_subset_gw(pts_s, pts_t, label_s, label_t, list_subset, options):
-	""" Get the list of mapping between source pts and target pts. 
+	""" Get the list of mapping between source pts and target pts.
+	Input: All the points and labels from source and target. List of small systems between these cells.
+	Output: A list of gw distance mappings in these small systems, a list of pts from the source and
+	another list from the target.
 	"""
 	list_gw = []
 	list_pts_s = []
@@ -223,6 +214,7 @@ def get_subset_gw(pts_s, pts_t, label_s, label_t, list_subset, options):
 		list_pts_t.append(pts_t_sub)
 	return list_gw, list_pts_s, list_pts_t
 
+
 def get_2nd_mapping(pts_s, pts_t, options):
 	""" Get the second-order transform matrix. 
 	Input: source/target samples, options
@@ -249,12 +241,12 @@ def get_2nd_mapping(pts_s, pts_t, options):
 		pts_t_sub = pts_t
 	# Compute first-order information
 	M = ot.dist(pts_s_sub, pts_t_sub, metric='euclidean')
-	M /= M.max()
+	M /= max(M.max(), 1e-6)
 	# Compute second-order information
 	C_s = sp.spatial.distance.cdist(pts_s_sub, pts_s_sub)
 	C_t = sp.spatial.distance.cdist(pts_t_sub, pts_t_sub)
-	C_s /= C_s.max()
-	C_t /= C_t.max()
+	C_s /= max(C_s.max(), 1e-6)
+	C_t /= max(C_t.max(), 1e-6)
 	# Point-wise probability
 	p_s = np.ones((len(pts_s_sub),)) / len(pts_s_sub)
 	p_t = np.ones((len(pts_t_sub),)) / len(pts_t_sub)
@@ -303,7 +295,7 @@ def get_1st_mapping(pts_s, pts_t, options):
 	tic0 = time.clock()
 	tic = time.clock()
 	M   = ot.dist(pts_s_sub, pts_t_sub, metric='euclidean')
-	M  /= (M.max() + 1e-6)
+	M  /= max(M.max(), 1e-6)
 	# Point-wise probability
 	p_s = np.ones((len(pts_s_sub),)) / len(pts_s_sub)
 	p_t = np.ones((len(pts_t_sub),)) / len(pts_t_sub)
@@ -316,13 +308,8 @@ def get_1st_mapping(pts_s, pts_t, options):
 	toc = time.clock()
 	print('Done. Time:' + str(toc - tic) + ' seconds\n')
 	# Visualize the general transform in the first order
-	if 'visualize' in options and options['visualize'] == True:
-		print('Visualize the 1st order mapping ...')
-		if 'img_name_source' in options:
-			img_name_prefix = options['img_name_source']
-		else:
-			img_name_prefix = 'trans_img_'
-		options['img_name'] = img_name_prefix + 'whole_img.png'
+	if 'visualize_first_order' in options and options['visualize_first_order'] == True:
+		options['img_name'] = 'whole_img_1st_order.png'
 		draw_mapping(pts_s_sub, pts_t_sub, G1, options)
 	# ----- Get the cell-wise mapping -----
 	T = get_label_mapping(label_s_sub, label_t_sub, G1) # Label transform matrix
@@ -418,8 +405,8 @@ def align_2_imgs(I1, I2, options = dict()):
 	# Save the list of elements
 	pickle.dump((pts_s, pts_t, list_gw, list_pts_s, list_pts_t, list_subset), open(options['img_folder'] + 'intermediate.p','wb'))
 	# Visualize mappings in the subset
-	if 'visualize' in options and options['visualize'] == True:
-		print('Visualize all the mappings ...')
+	if 'visualize_second_order' in options and options['visualize_second_order'] == True:
+		print('Visualize all the second-order mappings ...')
 		if 'img_name_source' in options:
 			img_name_prefix = options['img_name_source']
 		else:

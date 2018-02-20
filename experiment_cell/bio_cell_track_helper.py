@@ -1,15 +1,11 @@
-PATH_DATA = '/Users/xvz5220-admin/Dropbox/cell_tracking_data/data_output/'
-PATH_RAW = PATH_DATA + '01/'
-PATH_LAYER_9 = PATH_DATA + '01_09/'
-
 import scipy as sp
 import numpy as np
 import matplotlib.pylab as pl
 import os, sys, glob, shutil, cv2, random, warnings, time
 
-sys.path.insert(0,'/Users/xvz5220-admin/Dropbox/gromov_wasserstein_dist/POT/')
+from config import *
+sys.path.insert(0, PATH_OT)
 import ot
-
 
 def get_one_layer_img():
 	""" Move one layer images to the target folder
@@ -38,9 +34,13 @@ def list2str(lst):
 
 
 def draw_mapping(xs, xt, Gs, options = dict()):
+	""" Draw mapping from xs to Gs
+	"""
 	pl.figure()
-	ot.plot.plot2D_samples_mat(xs, xt, Gs, color=[.5, .5, 1])
-	pl.plot(xs[:, 0], xs[:, 1], '+b', label='Source samples')
+	xs_move = xs.astype(float) # Add a small move in the x-axis
+	xs_move[:,0] -= 0.1
+	ot.plot.plot2D_samples_mat(xs_move, xt, Gs, color=[.5, .5, 1])
+	pl.plot(xs_move[:, 0], xs_move[:, 1], '+b', label='Source samples') 
 	pl.plot(xt[:, 0], xt[:, 1], 'xr', label='Target samples')
 	pl.legend(loc=0)
 	if 'img_name' in options:
@@ -50,24 +50,32 @@ def draw_mapping(xs, xt, Gs, options = dict()):
 	if 'img_folder' in options:
 		img_folder = options['img_folder']
 	else:
-		img_folder = '/Users/xvz5220-admin/Desktop/'
+		img_folder = os.getcwd()
 	pl.savefig(img_folder + img_name)
+	pl.close()
 
 
-def draw_mapping_class(xs, xt, Gs, T, label_s, label_t):
-	options = dict()
-	for i in range(1, label_s.max()):
-		idx_s   = np.where(label_s == i)[0] # index of the pts from the source
-		class_t = np.nonzero(T[i - 1,:])[0].tolist() # index of the classes from the target
-		class_t = [i + 1 for i in class_t]
-		idx_t = np.array([],dtype = int)
-		for j in class_t:
-			idx_t = np.append(idx_t, np.where(label_t == j)[0]) # index of the pts from the target
-		options['img_name'] = 'trans' + '%02d'%i + '.png'
-		G_sub = Gs[idx_s, :]
-		G_sub = G_sub[:,idx_t]
-		xs_sub = xs[idx_s,:]
-		xt_sub = xt[idx_t,:]
-		draw_mapping(xs_sub, xt_sub, G_sub, options)
+def draw_mapping_list(list_xs, list_xt, list_Gs, list_subset, options = dict()):
+	""" Draw the mapping of the list of sample pts
+	"""
+	# Plot a general image first
+	pl.figure()
+	for i in range(len(list_xs)):
+		xs = list_xs[i]
+		xt = list_xt[i]
+		Gs = list_Gs[i]
+		ot.plot.plot2D_samples_mat(xs, xt, Gs, color=[.5, .5, 1])
+		pl.plot(xs[:, 0], xs[:, 1], '+b')
+		pl.plot(xt[:, 0], xt[:, 1], 'xr')
+	pl.savefig(options['img_folder'] + 'whole_img_2nd_order_w_' + str(options['weight_M']) + '.png')
+	pl.close()
+	# Plot the label-wise mappings
+	for i in range(len(list_xs)):
+		xs = list_xs[i]
+		xt = list_xt[i]
+		Gs = list_Gs[i]
+		options['img_name'] = 'img_part_' + list2str(list_subset[i][0]) + '_w_' + str(options['weight_M']) + '.png'
+		draw_mapping(xs, xt, Gs, options)
+
 
 
