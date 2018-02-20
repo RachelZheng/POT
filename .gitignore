@@ -109,3 +109,6 @@ cov_html/
 
 # Matlab files
 *.m
+
+# Configure files
+*config.py

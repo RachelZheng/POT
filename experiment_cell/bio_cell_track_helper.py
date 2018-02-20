@@ -1,3 +1,16 @@
+PATH_DATA = '/Users/xvz5220-admin/Dropbox/cell_tracking_data/data_output/'
+PATH_RAW = PATH_DATA + '01/'
+PATH_LAYER_9 = PATH_DATA + '01_09/'
+
+import scipy as sp
+import numpy as np
+import matplotlib.pylab as pl
+import os, sys, glob, shutil, cv2, random, warnings, time
+
+sys.path.insert(0,'/Users/xvz5220-admin/Dropbox/gromov_wasserstein_dist/POT/')
+import ot
+
+
 def get_one_layer_img():
 	""" Move one layer images to the target folder
 	""" 
